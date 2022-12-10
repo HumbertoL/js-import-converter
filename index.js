@@ -1,5 +1,6 @@
 // open file
 const fs = require('fs');
+const { kebabCase } = require('lodash');
 const path = require('path');
 // const filePath = path.join(__dirname, '../cea-desktop/client');
 
@@ -32,19 +33,83 @@ function handleMUIImports(contentBuffer) {
     importListArray.forEach((item, index) => {
       const componentName = item.trim();
 
-      // check some special cases
-      if (
-        componentName === 'useTheme' ||
-        componentName === 'alpha' ||
-        componentName === 'adaptV4Theme'
-      ) {
-        // these cannot be converted to default imports
-        newImports += `import { ${componentName} } from '@mui/material';`;
+      // Convert to default import
+      if (componentName) {
+        // check some special cases
+        if (
+          componentName === 'useTheme' ||
+          componentName === 'alpha' ||
+          componentName === 'adaptV4Theme'
+        ) {
+          // these cannot be converted to default imports
+          newImports += `import { ${componentName} } from '@mui/material';`;
+        } else {
+          const updatedImport = `import ${componentName} from '@mui/material/${componentName}';`;
+          newImports += updatedImport;
+
+          if (index < importListArray.length - 1) {
+            // Don't add new line to last item
+            newImports += '\n';
+          }
+        }
       }
+    });
+
+    // console.log('newImports', newImports);
+    const contentString = contentBuffer.toString();
+    // console.log('replacing ', importMatch, newImports);
+    // console.log('contentString', contentString.includes(importMatch));
+    const newContents = contentString.replace(importMatch, newImports);
+
+    return {
+      isModified: true,
+      newContents,
+    };
+  }
+
+  // else
+  return {
+    isModified: false,
+  };
+}
+
+function processSharedImports(contentBuffer) {
+  // We will convert this:
+  // import { Helmet } from 'shared';
+
+  // To this:
+  // import Helmet from 'shared/helmet';
+
+  // Global, multiline, single line (dot matches new line)
+  const regex = /^import\s+\{([^{]*)\}\s+from\s+\'shared';$/gms;
+
+  const match = regex.exec(contentBuffer);
+  if (match) {
+    // console.log('match', match);
+    const importMatch = match[0];
+    const importList = match[1];
+
+    // console.log('importMatch ', importMatch);
+    // console.log('importList', importList);
+    const importListArray = importList.split(',');
+
+    let newImports = '';
+    importListArray.forEach((item, index) => {
+      const componentName = item.trim();
 
       // Convert to default import
       if (componentName) {
-        const updatedImport = `import ${componentName} from '@mui/material/${componentName}';`;
+        // check some special cases
+        let updatedComponentPath = kebabCase(componentName);
+        if(componentName === 'SubscriptionEndDateElement' || componentName === 'EnhancedCheckbox') {
+          // these use PascalCase in the filename
+          updatedComponentPath = componentName;
+        } else if(componentName === 'TimeStamp') {
+          // These don't actually use kebab case
+          updatedComponentPath = componentName.toLocaleLowerCase();
+        }
+
+        const updatedImport = `import ${componentName} from 'shared/${updatedComponentPath}';`;
         newImports += updatedImport;
 
         if (index < importListArray.length - 1) {
@@ -60,11 +125,17 @@ function handleMUIImports(contentBuffer) {
     // console.log('contentString', contentString.includes(importMatch));
     const newContents = contentString.replace(importMatch, newImports);
 
-    return newContents;
+    return {
+      isModified: true,
+      newContents,
+    };
   }
 
   // else
-  return contentBuffer;
+  return {
+    isModified: false,
+    newContents: contentBuffer,
+  };
 }
 
 function processFile(dirPath, file) {
@@ -75,18 +146,25 @@ function processFile(dirPath, file) {
   const ext = path.extname(filePath);
   if (ext === '.js' || ext === '.jsx') {
     // read file into string
-    const contentBuffer = fs.readFileSync(filePath);
+    let contentBuffer = fs.readFileSync(filePath);
 
-    const newContents = handleMUIImports(contentBuffer);
+    const muiResult = handleMUIImports(contentBuffer);
+
+    contentBuffer = muiResult.isModified
+      ? muiResult.newContents
+      : contentBuffer;
+
+    const sharedResult = processSharedImports(contentBuffer);
 
     // write file
     console.log('writing file', filePath);
 
-    try {
-      // TODO: check if file has changed before writing
-      fs.writeFileSync(filePath, newContents);
-    } catch (e) {
-      console.log('error writing file', e);
+    if (muiResult.isModified || sharedResult.isModified) {
+      try {
+        fs.writeFileSync(filePath, sharedResult.newContents);
+      } catch (e) {
+        console.log('error writing file', e);
+      }
     }
   }
 }
