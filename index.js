@@ -14,7 +14,7 @@ function processFile(dirPath, file) {
   const ext = path.extname(filePath);
   if (ext === '.js' || ext === '.jsx') {
     // read file into string
-    const content = fs.readFileSync(filePath);
+    const contentBuffer = fs.readFileSync(filePath);
 
     // import { TextField } from '@mui/material';
 
@@ -24,14 +24,44 @@ function processFile(dirPath, file) {
     // Global, multiline, single line (dot matches new line)
     const regex = /^import\s+\{([^{]*)\}\s+from\s+\'\@mui\/material\';$/gms;
 
-    const match = regex.exec(content);
+    const match = regex.exec(contentBuffer);
     if (match) {
       // console.log('match', match);
       const importMatch = match[0];
       const importList = match[1];
 
-      console.log('importMatch ', importMatch);
+      // console.log('importMatch ', importMatch);
       // console.log('importList', importList);
+      const importListArray = importList.split(',');
+
+      let newImports = '';
+      importListArray.forEach((item, index) => {
+        const componentName = item.trim();
+        if (componentName) {
+          const updatedImport = `import ${componentName} from '@mui/material/${componentName}';`;
+          newImports += updatedImport;
+
+          if (index < importListArray.length - 1) {
+            // Don't add new line to last item
+            newImports += '\n';
+          }
+        }
+      });
+
+      // console.log('newImports', newImports);
+      const contentString = contentBuffer.toString();
+      // console.log('replacing ', importMatch, newImports);
+      // console.log('contentString', contentString.includes(importMatch));
+      const newContents = contentString.replace(importMatch, newImports);
+
+      // write file
+      console.log('writing file', filePath);
+
+      try {
+        fs.writeFileSync(filePath, newContents);
+      } catch (e) {
+        console.log('error writing file', e);
+      }
     }
   }
 }
