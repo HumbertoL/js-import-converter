@@ -6,6 +6,67 @@ const path = require('path');
 // open directory
 const clientRootDir = '../cea-desktop/client/src';
 
+function handleMUIImports(contentBuffer) {
+  // We will convert this:
+  // import { TextField } from '@mui/material';
+  // To this:
+  // import TextField from '@mui/material/TextField';
+
+  // find regex match
+  // const regex = /^import\s+\{(.*)\}\s+from\s+\'\@mui\/material\';/gm;
+
+  // Global, multiline, single line (dot matches new line)
+  const regex = /^import\s+\{([^{]*)\}\s+from\s+\'\@mui\/material\';$/gms;
+
+  const match = regex.exec(contentBuffer);
+  if (match) {
+    // console.log('match', match);
+    const importMatch = match[0];
+    const importList = match[1];
+
+    // console.log('importMatch ', importMatch);
+    // console.log('importList', importList);
+    const importListArray = importList.split(',');
+
+    let newImports = '';
+    importListArray.forEach((item, index) => {
+      const componentName = item.trim();
+
+      // check some special cases
+      if (
+        componentName === 'useTheme' ||
+        componentName === 'alpha' ||
+        componentName === 'adaptV4Theme'
+      ) {
+        // these cannot be converted to default imports
+        newImports += `import { ${componentName} } from '@mui/material';`;
+      }
+
+      // Convert to default import
+      if (componentName) {
+        const updatedImport = `import ${componentName} from '@mui/material/${componentName}';`;
+        newImports += updatedImport;
+
+        if (index < importListArray.length - 1) {
+          // Don't add new line to last item
+          newImports += '\n';
+        }
+      }
+    });
+
+    // console.log('newImports', newImports);
+    const contentString = contentBuffer.toString();
+    // console.log('replacing ', importMatch, newImports);
+    // console.log('contentString', contentString.includes(importMatch));
+    const newContents = contentString.replace(importMatch, newImports);
+
+    return newContents;
+  }
+
+  // else
+  return contentBuffer;
+}
+
 function processFile(dirPath, file) {
   const filePath = path.join(dirPath, file.name);
   // console.log('filePath', filePath);
@@ -16,52 +77,16 @@ function processFile(dirPath, file) {
     // read file into string
     const contentBuffer = fs.readFileSync(filePath);
 
-    // import { TextField } from '@mui/material';
+    const newContents = handleMUIImports(contentBuffer);
 
-    // find regex match
-    // const regex = /^import\s+\{(.*)\}\s+from\s+\'\@mui\/material\';/gm;
+    // write file
+    console.log('writing file', filePath);
 
-    // Global, multiline, single line (dot matches new line)
-    const regex = /^import\s+\{([^{]*)\}\s+from\s+\'\@mui\/material\';$/gms;
-
-    const match = regex.exec(contentBuffer);
-    if (match) {
-      // console.log('match', match);
-      const importMatch = match[0];
-      const importList = match[1];
-
-      // console.log('importMatch ', importMatch);
-      // console.log('importList', importList);
-      const importListArray = importList.split(',');
-
-      let newImports = '';
-      importListArray.forEach((item, index) => {
-        const componentName = item.trim();
-        if (componentName) {
-          const updatedImport = `import ${componentName} from '@mui/material/${componentName}';`;
-          newImports += updatedImport;
-
-          if (index < importListArray.length - 1) {
-            // Don't add new line to last item
-            newImports += '\n';
-          }
-        }
-      });
-
-      // console.log('newImports', newImports);
-      const contentString = contentBuffer.toString();
-      // console.log('replacing ', importMatch, newImports);
-      // console.log('contentString', contentString.includes(importMatch));
-      const newContents = contentString.replace(importMatch, newImports);
-
-      // write file
-      console.log('writing file', filePath);
-
-      try {
-        fs.writeFileSync(filePath, newContents);
-      } catch (e) {
-        console.log('error writing file', e);
-      }
+    try {
+      // TODO: check if file has changed before writing
+      fs.writeFileSync(filePath, newContents);
+    } catch (e) {
+      console.log('error writing file', e);
     }
   }
 }
