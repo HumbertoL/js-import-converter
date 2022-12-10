@@ -107,6 +107,9 @@ function processSharedImports(contentBuffer) {
         } else if(componentName === 'TimeStamp') {
           // These don't actually use kebab case
           updatedComponentPath = componentName.toLocaleLowerCase();
+        } else if(componentName === 'Expander') {
+          // This is a special case... because reasons
+          updatedComponentPath = 'expander-chevron-icon';
         }
 
         const updatedImport = `import ${componentName} from 'shared/${updatedComponentPath}';`;
