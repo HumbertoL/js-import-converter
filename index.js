@@ -205,7 +205,7 @@ function processFile(dirPath, file) {
 
   // get file extension
   const ext = path.extname(filePath);
-  if (ext === '.js' || ext === '.jsx') {
+  if (ext === '.js' || ext === '.jsx' || ext === ".ts" || ext === ".tsx") {
     // read file into string
     let contentBuffer = fs.readFileSync(filePath);
 
