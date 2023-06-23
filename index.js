@@ -70,6 +70,64 @@ function handleMUIImports(contentBuffer) {
   // else
   return {
     isModified: false,
+   // newContents: contentBuffer,
+  };
+}
+
+function handleLodashImports(contentBuffer) {
+  // We will convert this:
+  // import { TextField } from '@mui/material';
+  // To this:
+  // import TextField from '@mui/material/TextField';
+
+  // find regex match
+  // const regex = /^import\s+\{(.*)\}\s+from\s+\'\@mui\/material\';/gm;
+
+  // Global, multiline, single line (dot matches new line)
+  const regex = /^import\s+\{([^{]*)\}\s+from\s+\'lodash\';$/gms;
+
+  const match = regex.exec(contentBuffer);
+  if (match) {
+    // console.log('match', match);
+    const importMatch = match[0];
+    const importList = match[1];
+
+    // console.log('importMatch ', importMatch);
+    // console.log('importList', importList);
+    const importListArray = importList.split(',');
+
+    let newImports = '';
+    importListArray.forEach((item, index) => {
+      const componentName = item.trim();
+
+      // Convert to default import
+      if (componentName) {
+        const updatedImport = `import ${componentName} from 'lodash/${componentName}';`;
+        newImports += updatedImport;
+
+        if (index < importListArray.length - 1) {
+          // Don't add new line to last item
+          newImports += '\n';
+        }
+      }
+    });
+
+    // console.log('newImports', newImports);
+    const contentString = contentBuffer.toString();
+    // console.log('replacing ', importMatch, newImports);
+    // console.log('contentString', contentString.includes(importMatch));
+    const newContents = contentString.replace(importMatch, newImports);
+
+    return {
+      isModified: true,
+      newContents,
+    };
+  }
+
+  // else
+  return {
+    isModified: false,
+    newContents: contentBuffer,
   };
 }
 
@@ -157,14 +215,15 @@ function processFile(dirPath, file) {
       ? muiResult.newContents
       : contentBuffer;
 
-    const sharedResult = processSharedImports(contentBuffer);
+    // const sharedResult = processSharedImports(contentBuffer);
+    const lodashResult = handleLodashImports(contentBuffer);
 
     // write file
     console.log('writing file', filePath);
 
-    if (muiResult.isModified || sharedResult.isModified) {
+    if (muiResult.isModified || lodashResult.isModified) {
       try {
-        fs.writeFileSync(filePath, sharedResult.newContents);
+        fs.writeFileSync(filePath, lodashResult.newContents);
       } catch (e) {
         console.log('error writing file', e);
       }
